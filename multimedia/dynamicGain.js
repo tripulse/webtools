@@ -28,21 +28,14 @@ const silence_thresold = LEAST_FLOAT;
 
 (function() {
     /**
-     * Size of the time-domain buffer. The less the more frequent the gain will change.
-     * Lower values might cause audible distortions and higher ones make a smooth transition.
+     * Target size of the time-domain buffer to capture upon calling .getFloatTimeDomainData(),
+     * higher sizes take better running averages, but still there's a down-side, if the audio
+     * is likely to change amplitude in less samples than this, some portions might sound quieter.
      */
-    const FFT_SIZE = 32768;
+    const WINDOW_SIZE = 32768;
 
-    /**
-     * YouTube video which we're going to extract the audio data from.
-     * The audio gets decoded beforehand. We just play with the audio and make it good.
-     */
     var VIDEO_ELEMENT = document.querySelector('video.video-stream, video.html5-main-video');
 
-    /**
-     * An interface to use the WebAudio API. The base node for all the other nodes.
-     * (audioContext.destination) works like a sink where every sample of audio goes in.
-     */
     const audioContext = new AudioContext();
     const audioNodes = {
         source: audioContext.createMediaElementSource(VIDEO_ELEMENT),
@@ -53,35 +46,21 @@ const silence_thresold = LEAST_FLOAT;
     // Sets the buffer size of AnalyserNode.
     audioNodes.analyser.fftSize = FFT_SIZE;
 
-    /**
-     * Connect all the nodes to create a "Node-Graph".
-     * And, flow the PCM data through the nodes.
-     */
     with(audioNodes) {
         source.connect(analyser);
         analyser.connect(gain);
         gain.connect(audioContext.destination);
     }
 
-    /**
-     * Buffer to store the audio data in. Samples are stored as 32-bit Float ([-1..1]).
-     * Size of the buffer depends on the (audioNodes.analyser.fftSize).
-     */
     var timeDomain = new Float32Array(audioNodes.analyser.fftSize);
 
     (function normalise() {
         requestAnimationFrame(normalise);
 
         audioNodes.analyser.getFloatTimeDomainData(timeDomain);
-        /**
-         * (1/max) would result the coefficient to be mutiplied
-         * to normalize amplitude to (+1). Taking peak of 32767 samples.
-         * (VIDEO_ELEMENT.volume) is a linear coefficent for
-         * adjusting the gain value.
-         */
         try {
             audioNodes.gain.gain.value = (1/Math.max.apply(this, timeDomain)) * VIDEO_ELEMENT.volume;
-        } catch(err) {
+        } catch(e) {
             audioNodes.gain.gain.value = 1;
         }
     })();
